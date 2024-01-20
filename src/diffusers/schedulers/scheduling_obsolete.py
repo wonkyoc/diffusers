@@ -121,7 +121,7 @@ def betas_for_alpha_bar(
     return torch.tensor(betas, dtype=torch.float32)
 
 
-class DPMSolverSDEScheduler(SchedulerMixin, ConfigMixin):
+class SpeculativeScheduler(SchedulerMixin, ConfigMixin):
     """
     DPMSolverSDEScheduler implements the stochastic sampler from the [Elucidating the Design Space of Diffusion-Based
     Generative Models](https://huggingface.co/papers/2206.00364) paper.
@@ -176,6 +176,11 @@ class DPMSolverSDEScheduler(SchedulerMixin, ConfigMixin):
         timestep_spacing: str = "linspace",
         steps_offset: int = 0,
     ):
+
+        # WC: variables
+        accept_ls = []
+        error_ls = []
+
         if trained_betas is not None:
             self.betas = torch.tensor(trained_betas, dtype=torch.float32)
         elif beta_schedule == "linear":
@@ -392,12 +397,6 @@ class DPMSolverSDEScheduler(SchedulerMixin, ConfigMixin):
         t = t.reshape(sigma.shape)
         return t
 
-    def _sigma_to_alpha_sigma_t(self, sigma):
-        alpha_t = 1 / ((sigma**2 + 1) ** 0.5)
-        sigma_t = sigma * alpha_t
-
-        return alpha_t, sigma_t
-
     # copied from diffusers.schedulers.scheduling_euler_discrete._convert_to_karras
     def _convert_to_karras(self, in_sigmas: torch.FloatTensor) -> torch.FloatTensor:
         """Constructs the noise schedule of Karras et al. (2022)."""
@@ -467,7 +466,6 @@ class DPMSolverSDEScheduler(SchedulerMixin, ConfigMixin):
         if self.state_in_first_order:
             sigma = self.sigmas[self.step_index]
             sigma_next = self.sigmas[self.step_index + 1]
-            print(f"sigma_next: {sigma_next}")
         else:
             # 2nd order
             sigma = self.sigmas[self.step_index - 1]
@@ -482,9 +480,7 @@ class DPMSolverSDEScheduler(SchedulerMixin, ConfigMixin):
         # 1. compute predicted original sample (x_0) from sigma-scaled predicted noise
         if self.config.prediction_type == "epsilon":
             sigma_input = sigma if self.state_in_first_order else sigma_fn(t_proposed)
-            alpha_t, sigma_t = self._sigma_to_alpha_sigma_t(sigma_input)
-            pred_original_sample = (sample - sigma_t * model_output) / alpha_t
-            #pred_original_sample = sample - sigma_input * model_output
+            pred_original_sample = sample - sigma_input * model_output
         elif self.config.prediction_type == "v_prediction":
             sigma_input = sigma if self.state_in_first_order else sigma_fn(t_proposed)
             pred_original_sample = model_output * (-sigma_input / (sigma_input**2 + 1) ** 0.5) + (
@@ -501,6 +497,8 @@ class DPMSolverSDEScheduler(SchedulerMixin, ConfigMixin):
             derivative = (sample - pred_original_sample) / sigma
             dt = sigma_next - sigma
             prev_sample = sample + derivative * dt
+            accept = 0
+            error = 0
         else:
             if self.state_in_first_order:
                 t_next = t_proposed
@@ -521,7 +519,36 @@ class DPMSolverSDEScheduler(SchedulerMixin, ConfigMixin):
                 # store for 2nd order step
                 self.sample = sample
                 self.mid_point_sigma = sigma_fn(t_next)
+                self.x1 = prev_sample
+                accept = 0
+                error = 0
             else:
+                # WC: comparison
+                x1 = self.x1
+                x2 = prev_sample
+
+                atol = 0.0078
+                theta = 0.9
+                rtol = 2.5
+
+                delta = torch.max(torch.ones_like(self.sample).to(self.sample) * atol, 
+                        rtol * torch.max(torch.abs(x1), torch.abs(x1)))
+                norm_fn = lambda v: torch.sqrt(
+                        torch.square(v.reshape((v.shape[0], -1)))
+                        .mean(dim=-1, keepdim=True)
+                    )
+                E = torch.max(torch.abs((x2-x1) / delta))
+                E = norm_fn((x2-x1) / delta)
+                error = E.mean().tolist()
+
+                if (E.mean() <= 1.):
+                #if torch.all(E <= 1.):
+                    prev_sample = x1
+                    accept = 1
+                else:
+                    prev_sample = x2
+                    accept = 2
+
                 # free for "first order mode"
                 self.sample = None
                 self.mid_point_sigma = None
@@ -532,7 +559,7 @@ class DPMSolverSDEScheduler(SchedulerMixin, ConfigMixin):
         if not return_dict:
             return (prev_sample,)
 
-        return SchedulerOutput(prev_sample=prev_sample)
+        return SchedulerOutput(prev_sample=prev_sample), accept, error
 
     # Copied from diffusers.schedulers.scheduling_heun_discrete.HeunDiscreteScheduler.add_noise
     def add_noise(

@@ -182,6 +182,7 @@ except OptionalDependencyNotAvailable:
 
 else:
     _import_structure["schedulers"].extend(["DPMSolverSDEScheduler"])
+    _import_structure["schedulers"].extend(["SpeculativeScheduler"])
 
 try:
     if not (is_torch_available() and is_transformers_available()):
@@ -536,6 +537,7 @@ if TYPE_CHECKING or DIFFUSERS_SLOW_IMPORT:
         from .utils.dummy_torch_and_torchsde_objects import *  # noqa F403
     else:
         from .schedulers import DPMSolverSDEScheduler
+        from .schedulers import SpeculativeScheduler
 
     try:
         if not (is_torch_available() and is_transformers_available()):

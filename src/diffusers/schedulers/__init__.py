@@ -113,6 +113,7 @@ except OptionalDependencyNotAvailable:
 
 else:
     _import_structure["scheduling_dpmsolver_sde"] = ["DPMSolverSDEScheduler"]
+    _import_structure["scheduling_speculative"] = ["SpeculativeScheduler"]
 
 if TYPE_CHECKING or DIFFUSERS_SLOW_IMPORT:
     from ..utils import (
@@ -194,6 +195,7 @@ if TYPE_CHECKING or DIFFUSERS_SLOW_IMPORT:
         from ..utils.dummy_torch_and_torchsde_objects import *  # noqa F403
     else:
         from .scheduling_dpmsolver_sde import DPMSolverSDEScheduler
+        from .scheduling_speculative import SpeculativeScheduler
 
 else:
     import sys
