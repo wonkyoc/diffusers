@@ -216,6 +216,24 @@ class Transformer2DModel(ModelMixin, ConfigMixin):
                 for d in range(num_layers)
             ]
         )
+        #print(f"""
+        #{inner_dim},
+        #{num_attention_heads},
+        #{attention_head_dim},
+        #dropout={dropout},
+        #cross_attention_dim={cross_attention_dim},
+        #activation_fn={activation_fn},
+        #num_embeds_ada_norm={num_embeds_ada_norm},
+        #attention_bias={attention_bias},
+        #only_cross_attention={only_cross_attention},
+        #double_self_attention={double_self_attention},
+        #upcast_attention={upcast_attention},
+        #norm_type={norm_type},
+        #norm_elementwise_affine={norm_elementwise_affine},
+        #norm_eps={norm_eps},
+        #attention_type={attention_type},
+        #""")
+        #print(self.transformer_blocks)
 
         # 4. Define output layers
         self.out_channels = in_channels if out_channels is None else out_channels

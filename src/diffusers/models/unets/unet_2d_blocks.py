@@ -36,6 +36,8 @@ from ..resnet import (
 from ..transformers.dual_transformer_2d import DualTransformer2DModel
 from ..transformers.transformer_2d import Transformer2DModel
 
+import time
+
 
 logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
 
@@ -849,6 +851,7 @@ class UNetMidBlock2DCrossAttn(nn.Module):
                 logger.warning("Passing `scale` to `cross_attention_kwargs` is depcrecated. `scale` will be ignored.")
 
         hidden_states = self.resnets[0](hidden_states, temb)
+        count = 0
         for attn, resnet in zip(self.attentions, self.resnets[1:]):
             if self.training and self.gradient_checkpointing:
 
@@ -877,6 +880,7 @@ class UNetMidBlock2DCrossAttn(nn.Module):
                     **ckpt_kwargs,
                 )
             else:
+                start = time.time()
                 hidden_states = attn(
                     hidden_states,
                     encoder_hidden_states=encoder_hidden_states,
@@ -885,7 +889,20 @@ class UNetMidBlock2DCrossAttn(nn.Module):
                     encoder_attention_mask=encoder_attention_mask,
                     return_dict=False,
                 )[0]
+                if f"attn-{count}" not in self.profile:
+                    self.profile[f"attn-{count}"] = time.time() - start
+                else:
+                    self.profile[f"attn-{count}"] += time.time() - start
+
+
+                start = time.time()
                 hidden_states = resnet(hidden_states, temb)
+
+                if f"resnet-{count}" not in self.profile:
+                    self.profile[f"resnet-{count}"] = time.time() - start
+                else:
+                    self.profile[f"resnet-{count}"] += time.time() - start
+                count += 1
 
         return hidden_states
 
@@ -1247,6 +1264,7 @@ class CrossAttnDownBlock2D(nn.Module):
 
         blocks = list(zip(self.resnets, self.attentions))
 
+        count = 0
         for i, (resnet, attn) in enumerate(blocks):
             if self.training and self.gradient_checkpointing:
 
@@ -1275,7 +1293,17 @@ class CrossAttnDownBlock2D(nn.Module):
                     return_dict=False,
                 )[0]
             else:
+                start = time.time()
                 hidden_states = resnet(hidden_states, temb)
+                #print("resnet")
+                #print(hidden_states.size())
+
+                if f"resnet-{count}" not in self.profile:
+                    self.profile[f"resnet-{count}"] = time.time() - start
+                else:
+                    self.profile[f"resnet-{count}"] += time.time() - start
+
+                start = time.time()
                 hidden_states = attn(
                     hidden_states,
                     encoder_hidden_states=encoder_hidden_states,
@@ -1284,6 +1312,11 @@ class CrossAttnDownBlock2D(nn.Module):
                     encoder_attention_mask=encoder_attention_mask,
                     return_dict=False,
                 )[0]
+                if f"attn-{count}" not in self.profile:
+                    self.profile[f"attn-{count}"] = time.time() - start
+                else:
+                    self.profile[f"attn-{count}"] += time.time() - start
+                count += 1
 
             # apply additional residuals to the output of the last pair of resnet and attention blocks
             if i == len(blocks) - 1 and additional_residuals is not None:
@@ -1361,6 +1394,7 @@ class DownBlock2D(nn.Module):
 
         output_states = ()
 
+        count = 0
         for resnet in self.resnets:
             if self.training and self.gradient_checkpointing:
 
@@ -1379,7 +1413,14 @@ class DownBlock2D(nn.Module):
                         create_custom_forward(resnet), hidden_states, temb
                     )
             else:
+                start = time.time()
                 hidden_states = resnet(hidden_states, temb)
+
+                if f"resnet-{count}" not in self.profile:
+                    self.profile[f"resnet-{count}"] = time.time() - start
+                else:
+                    self.profile[f"resnet-{count}"] += time.time() - start
+                count += 1
 
             output_states = output_states + (hidden_states,)
 
@@ -2492,6 +2533,7 @@ class CrossAttnUpBlock2D(nn.Module):
             and getattr(self, "b2", None)
         )
 
+        count = 0
         for resnet, attn in zip(self.resnets, self.attentions):
             # pop res hidden states
             res_hidden_states = res_hidden_states_tuple[-1]
@@ -2538,15 +2580,29 @@ class CrossAttnUpBlock2D(nn.Module):
                     return_dict=False,
                 )[0]
             else:
+                start = time.time()
                 hidden_states = resnet(hidden_states, temb)
+                if f"resnet-{count}" not in self.profile:
+                    self.profile[f"resnet-{count}"] = time.time() - start
+                else:
+                    self.profile[f"resnet-{count}"] += time.time() - start
+
+                start = time.time()
                 hidden_states = attn(
                     hidden_states,
                     encoder_hidden_states=encoder_hidden_states,
                     cross_attention_kwargs=cross_attention_kwargs,
+
                     attention_mask=attention_mask,
                     encoder_attention_mask=encoder_attention_mask,
                     return_dict=False,
                 )[0]
+                if f"attn-{count}" not in self.profile:
+                    self.profile[f"attn-{count}"] = time.time() - start
+                else:
+                    self.profile[f"attn-{count}"] += time.time() - start
+                count += 1
+
 
         if self.upsamplers is not None:
             for upsampler in self.upsamplers:
@@ -2625,6 +2681,7 @@ class UpBlock2D(nn.Module):
             and getattr(self, "b2", None)
         )
 
+        count = 0
         for resnet in self.resnets:
             # pop res hidden states
             res_hidden_states = res_hidden_states_tuple[-1]
@@ -2661,7 +2718,14 @@ class UpBlock2D(nn.Module):
                         create_custom_forward(resnet), hidden_states, temb
                     )
             else:
+                start = time.time()
                 hidden_states = resnet(hidden_states, temb)
+                if f"resnet-{count}" not in self.profile:
+                    self.profile[f"resnet-{count}"] = time.time() - start
+                else:
+                    self.profile[f"resnet-{count}"] += time.time() - start
+                count += 1
+
 
         if self.upsamplers is not None:
             for upsampler in self.upsamplers:

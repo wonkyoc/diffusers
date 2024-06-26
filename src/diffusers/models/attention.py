@@ -291,6 +291,18 @@ class BasicTransformerBlock(nn.Module):
         class_labels: Optional[torch.LongTensor] = None,
         added_cond_kwargs: Optional[Dict[str, torch.Tensor]] = None,
     ) -> torch.FloatTensor:
+
+        #print(f"""
+        #forward arguments
+        #{hidden_states.size()}
+        #{attention_mask}
+        #{encoder_hidden_states.size()}
+        #{encoder_attention_mask}
+        #{timestep}
+        #{cross_attention_kwargs}
+        #{class_labels}
+        #{added_cond_kwargs}
+        #""")
         if cross_attention_kwargs is not None:
             if cross_attention_kwargs.get("scale", None) is not None:
                 logger.warning("Passing `scale` to `cross_attention_kwargs` is depcrecated. `scale` will be ignored.")
@@ -332,6 +344,9 @@ class BasicTransformerBlock(nn.Module):
             attention_mask=attention_mask,
             **cross_attention_kwargs,
         )
+        #print("self")
+        #print(hidden_states.size())
+
         if self.norm_type == "ada_norm_zero":
             attn_output = gate_msa.unsqueeze(1) * attn_output
         elif self.norm_type == "ada_norm_single":
@@ -370,6 +385,8 @@ class BasicTransformerBlock(nn.Module):
                 **cross_attention_kwargs,
             )
             hidden_states = attn_output + hidden_states
+        #print("cross")
+        #print(hidden_states.size())
 
         # 4. Feed-forward
         # i2vgen doesn't have this norm 🤷‍♂️
@@ -399,6 +416,9 @@ class BasicTransformerBlock(nn.Module):
         hidden_states = ff_output + hidden_states
         if hidden_states.ndim == 4:
             hidden_states = hidden_states.squeeze(1)
+
+        #print("ff")
+        #print(hidden_states.size())
 
         return hidden_states
 
