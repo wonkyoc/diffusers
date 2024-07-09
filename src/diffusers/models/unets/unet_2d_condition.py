@@ -465,6 +465,7 @@ class UNet2DConditionModel(ModelMixin, ConfigMixin, UNet2DConditionLoadersMixin,
             self.conv_norm_out = nn.GroupNorm(
                 num_channels=block_out_channels[0], num_groups=norm_num_groups, eps=norm_eps
             )
+            self.conv_norm_out.offloaded_tensor = torch.empty((2, 320, 64, 64)).pin_memory()
             self.conv_act = get_activation(act_fn)
 
         else:
@@ -1230,7 +1231,7 @@ class UNet2DConditionModel(ModelMixin, ConfigMixin, UNet2DConditionLoadersMixin,
                     sample += down_intrablock_additional_residuals.pop(0)
 
             down_block_res_samples += res_samples
-            print(f"down-{count}")
+            #print(f"down-{count}: {sample.size()}")
             count += 1
 
         if is_controlnet:
@@ -1257,6 +1258,8 @@ class UNet2DConditionModel(ModelMixin, ConfigMixin, UNet2DConditionLoadersMixin,
                 )
             else:
                 sample = self.mid_block(sample, emb)
+            
+            #print(f"mid: {sample.size()}")
 
             # To support T2I-Adapter-XL
             if (
@@ -1299,6 +1302,7 @@ class UNet2DConditionModel(ModelMixin, ConfigMixin, UNet2DConditionLoadersMixin,
                     res_hidden_states_tuple=res_samples,
                     upsample_size=upsample_size,
                 )
+            #print(f"up-{i}: {sample.size()}")
 
         # 6. post-process
         if self.conv_norm_out:

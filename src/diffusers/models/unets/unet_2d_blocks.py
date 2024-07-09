@@ -889,6 +889,7 @@ class UNetMidBlock2DCrossAttn(nn.Module):
                     encoder_attention_mask=encoder_attention_mask,
                     return_dict=False,
                 )[0]
+                self.activation["attn"] = hidden_states.nelement() * hidden_states.element_size()
                 if f"attn-{count}" not in self.profile:
                     self.profile[f"attn-{count}"] = time.time() - start
                 else:
@@ -897,6 +898,7 @@ class UNetMidBlock2DCrossAttn(nn.Module):
 
                 start = time.time()
                 hidden_states = resnet(hidden_states, temb)
+                self.activation["resnet"] = hidden_states.nelement() * hidden_states.element_size()
 
                 if f"resnet-{count}" not in self.profile:
                     self.profile[f"resnet-{count}"] = time.time() - start
@@ -1295,8 +1297,7 @@ class CrossAttnDownBlock2D(nn.Module):
             else:
                 start = time.time()
                 hidden_states = resnet(hidden_states, temb)
-                #print("resnet")
-                #print(hidden_states.size())
+                self.activation["resnet"] = hidden_states.nelement() * hidden_states.element_size()
 
                 if f"resnet-{count}" not in self.profile:
                     self.profile[f"resnet-{count}"] = time.time() - start
@@ -1312,6 +1313,7 @@ class CrossAttnDownBlock2D(nn.Module):
                     encoder_attention_mask=encoder_attention_mask,
                     return_dict=False,
                 )[0]
+                self.activation["attn"] = hidden_states.nelement() * hidden_states.element_size()
                 if f"attn-{count}" not in self.profile:
                     self.profile[f"attn-{count}"] = time.time() - start
                 else:
@@ -1415,6 +1417,8 @@ class DownBlock2D(nn.Module):
             else:
                 start = time.time()
                 hidden_states = resnet(hidden_states, temb)
+
+                self.activation["resnet"] = hidden_states.nelement() * hidden_states.element_size()
 
                 if f"resnet-{count}" not in self.profile:
                     self.profile[f"resnet-{count}"] = time.time() - start
@@ -2582,6 +2586,7 @@ class CrossAttnUpBlock2D(nn.Module):
             else:
                 start = time.time()
                 hidden_states = resnet(hidden_states, temb)
+                self.activation["resnet"] = hidden_states.nelement() * hidden_states.element_size()
                 if f"resnet-{count}" not in self.profile:
                     self.profile[f"resnet-{count}"] = time.time() - start
                 else:
@@ -2597,6 +2602,7 @@ class CrossAttnUpBlock2D(nn.Module):
                     encoder_attention_mask=encoder_attention_mask,
                     return_dict=False,
                 )[0]
+                self.activation["attn"] = hidden_states.nelement() * hidden_states.element_size()
                 if f"attn-{count}" not in self.profile:
                     self.profile[f"attn-{count}"] = time.time() - start
                 else:
@@ -2720,6 +2726,7 @@ class UpBlock2D(nn.Module):
             else:
                 start = time.time()
                 hidden_states = resnet(hidden_states, temb)
+                self.activation["resnet"] = hidden_states.nelement() * hidden_states.element_size()
                 if f"resnet-{count}" not in self.profile:
                     self.profile[f"resnet-{count}"] = time.time() - start
                 else:
